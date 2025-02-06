@@ -1,0 +1,12 @@
+sources:
+    - name: noodles
+      handler:
+          graphql:
+              endpoint: ${GRAPH_API_URL}
+      transforms:
+          - autoPagination:
+            validateSchema: true
+            limitOfRecords: 100000
+            skipArgumentLimit: 10000
+documents:
+    - "./documents/**/*.graphql"

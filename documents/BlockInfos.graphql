@@ -1,0 +1,35 @@
+query BlockInfos($fromGraphTimestamp: BigInt!, $toGraphTimestamp: BigInt!) {
+  _meta {
+    block {
+        timestamp
+    }
+  }
+    firstTrade: creditsTrades(
+    where: {
+      and: [
+        { blockTimestamp_gte: $fromGraphTimestamp }
+        { blockTimestamp_lte: $toGraphTimestamp }
+      ]
+    }
+    first: 1
+    orderBy: blockTimestamp
+    orderDirection: asc
+  ) {
+    blockNumber
+    blockTimestamp
+  }
+  lastTrade: creditsTrades(
+    where: {
+      and: [
+        { blockTimestamp_gte: $fromGraphTimestamp }
+        { blockTimestamp_lte: $toGraphTimestamp }
+      ]
+    }
+    first: 1
+    orderBy: blockTimestamp
+    orderDirection: desc
+  ) {
+    blockNumber
+    blockTimestamp
+  }
+}

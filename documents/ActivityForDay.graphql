@@ -1,0 +1,48 @@
+query ActivityForDay(
+  $blockNumberSnapshot: Int!
+  $dayTimestamp: Int8!
+  $visibilityBalancesCursorId: BigInt!
+  $userDayActivitiesCursorId: BigInt!
+) {
+  protocol(id: "0x00000000", block: { number: $blockNumberSnapshot }) {
+    id
+    totalValueLocked
+  }
+  visibilityBalances(
+    first: 6000
+    block: { number: $blockNumberSnapshot }
+    where: { and: [{ cursorId_gt: $visibilityBalancesCursorId }] }
+    orderBy: cursorId
+    orderDirection: asc
+  ) {
+    user {
+      id
+    }
+    balance
+    cursorId
+  }
+  usersDayActivities(where: { and: [{ dayTimestamp: $dayTimestamp }] }) {
+    nbActiveUsers
+    protocolFees
+    referrerFees
+  }
+  userDayActivities(
+    first: 6000
+    where: {
+      and: [
+        { cursorId_gt: $userDayActivitiesCursorId }
+        { dayTimestamp: $dayTimestamp }
+      ]
+    }
+    orderBy: cursorId
+    orderDirection: asc
+  ) {
+    user {
+      id
+    }
+    isActiveUser
+    protocolFees
+    referrerFees
+    cursorId
+  }
+}
