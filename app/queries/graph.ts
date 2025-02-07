@@ -9,7 +9,8 @@ import {
   VisibilityBalance,
   User,
   UsersDayActivity,
-  UserDayActivity
+  UserDayActivity,
+  Visibility
 } from '../../.graphclient'
 
 export type ActivityForDay = {
@@ -17,6 +18,8 @@ export type ActivityForDay = {
   visibilityBalances: Array<
     Pick<VisibilityBalance, 'balance' | 'cursorId'> & {
       user: Pick<User, 'id'>
+    } & {
+      visibility: Pick<Visibility, 'totalSupply'>
     }
   >
   usersDayActivities:

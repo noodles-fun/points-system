@@ -5,7 +5,8 @@ import {
   getActivityForDay,
   getBlockInfos
 } from '../queries/graph'
-import { getPeriod } from '../utils'
+import { computeTradeCost, getPeriod } from '../utils'
+import { formatEther } from 'ethers'
 
 class Points {
   private basePoints = BigNumber(100_000)
@@ -41,11 +42,14 @@ class Points {
     this.addFromDailyActiveUsers = addFromDailyActiveUsers
 
     this.points = {}
-    this.totalPointsToReward = this.basePoints.plus(
-      this.pointsPerProtocolFeeETH.times(
-        BigNumber(activityForDay.protocol.totalValueLocked)
-      )
+
+    const totalProtocolFees = BigInt(
+      this.activityForDay.usersDayActivities?.protocolFees || '0'
     )
+    this.totalPointsToReward = this.basePoints.plus(
+      this.pointsPerProtocolFeeETH.times(formatEther(totalProtocolFees))
+    )
+
     this._addFromDailyActivity()
     this._addFromHoldings()
     this._addFromProtocolFees()
@@ -87,18 +91,94 @@ class Points {
 
   private async _addFromHoldings() {
     if (this.addFromHoldings) {
-      // TODO
+      const { visibilityBalances, protocol } = this.activityForDay
+
+      const totalHoldingsETH = BigNumber(protocol.totalValueLocked)
+
+      const nbPointsForHoldings = this.totalPointsToReward.times(
+        this.holdingsPointsShare
+      )
+
+      for (const visibilityBalance of visibilityBalances) {
+        const {
+          balance,
+          user: { id: userAddress },
+          visibility: { totalSupply }
+        } = visibilityBalance
+
+        if (BigInt(balance) > 0) {
+          const userHoldingsWei = computeTradeCost(
+            BigInt(totalSupply),
+            BigInt(balance),
+            false
+          )
+          const userHoldingsETH = BigNumber(formatEther(userHoldingsWei))
+          const userHoldingsETHPercentage =
+            userHoldingsETH.div(totalHoldingsETH)
+
+          const userPoints = nbPointsForHoldings.times(
+            userHoldingsETHPercentage
+          )
+          this._addPoint(userAddress, userPoints)
+        }
+      }
     }
   }
   private async _addFromProtocolFees() {
     if (this.addFromProtocolFees) {
-      // TODO
+      const { userDayActivities, usersDayActivities } = this.activityForDay
+
+      if (usersDayActivities && BigInt(usersDayActivities.protocolFees) > 0n) {
+        const totalProtocolFees = BigNumber(usersDayActivities.protocolFees)
+
+        const nbPointsForProtocolFees = this.totalPointsToReward.times(
+          this.protocolFeesPointsShare
+        )
+
+        for (const userActivity of userDayActivities) {
+          const {
+            user: { id: userAddress },
+            protocolFees: userProtocolFees
+          } = userActivity
+
+          const userProtocolFeesPercentage =
+            BigNumber(userProtocolFees).div(totalProtocolFees)
+
+          const userPoints = nbPointsForProtocolFees.times(
+            userProtocolFeesPercentage
+          )
+          this._addPoint(userAddress, userPoints)
+        }
+      }
     }
   }
 
   private async _addFromReferralFees() {
     if (this.addFromReferrals) {
-      // TODO
+      const { userDayActivities, usersDayActivities } = this.activityForDay
+
+      if (usersDayActivities && BigInt(usersDayActivities.referrerFees) > 0n) {
+        const totalReferrerFees = BigNumber(usersDayActivities.referrerFees)
+
+        const nbPointsForReferrerFees = this.totalPointsToReward.times(
+          this.referralsPointsShare
+        )
+
+        for (const userActivity of userDayActivities) {
+          const {
+            user: { id: userAddress },
+            referrerFees: userReferrerFees
+          } = userActivity
+
+          const userReferrerFeesPercentage =
+            BigNumber(userReferrerFees).div(totalReferrerFees)
+
+          const userPoints = nbPointsForReferrerFees.times(
+            userReferrerFeesPercentage
+          )
+          this._addPoint(userAddress, userPoints)
+        }
+      }
     }
   }
 

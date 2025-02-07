@@ -2,7 +2,7 @@
 
 ## Points Distribution
 
-The system distributes a fixed amount of points per period (e.g., weekly), calculated daily (**100,000 points distributed per day**).
+The system distributes an amount of points, calculated daily (e.g., **100,000 points distributed per day**).
 
 * **75%** → Distributed proportionally to protocol revenue contribution.  
   * Example: If you contributed **1 ETH** in fees out of **4 ETH** total revenue, you get:  
@@ -16,7 +16,7 @@ The system distributes a fixed amount of points per period (e.g., weekly), calcu
   * Example: If you earned **1 ETH** in referral fees out of **4 ETH** total, you get:  
     `1/4 * 4% * 100,000 = 1,000 points`
 
-* **6%** → Equally distributed to all wallets that traded **≥ 0.03 ETH** that day.  
+* **6%** → Equally distributed to all wallets that traded **≥ 0.1 ETH** that day.  
   * Example: If **30 wallets** qualified, you get:  
     `1/30 * 6% * 100,000 = 200 points`
 
@@ -27,8 +27,7 @@ The system distributes a fixed amount of points per period (e.g., weekly), calcu
 ### **Notes**
 
 * Each point corresponds to **1 $NOOD** (to be confirmed).
-* The daily points distribution could change to be **dynamic**, for example:  
-  `100,000 + (10,000 * protocol revenue in ETH)`
+* The daily points distribution is **dynamic**: `N = 100,000 + (50,000 * protocol revenue in ETH)`
 
 ## **API Endpoints**
 

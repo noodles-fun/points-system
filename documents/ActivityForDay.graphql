@@ -18,6 +18,9 @@ query ActivityForDay(
     user {
       id
     }
+    visibility {
+      totalSupply
+    }
     balance
     cursorId
   }

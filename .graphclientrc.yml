@@ -6,7 +6,5 @@ sources:
       transforms:
           - autoPagination:
             validateSchema: true
-            limitOfRecords: 100000
-            skipArgumentLimit: 10000
 documents:
     - "./documents/**/*.graphql"
