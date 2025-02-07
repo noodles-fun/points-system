@@ -1,33 +1,45 @@
 import { BigNumber } from 'bignumber.js'
-
+import { formatEther, keccak256 } from 'ethers'
+import Web3 from 'web3'
 import {
   ActivityForDay,
   getActivityForDay,
   getBlockInfos
 } from '../queries/graph'
+import {
+  ClaimablePoints,
+  storeClaimablePointsAndUsers,
+  UserClaimablePoints
+} from '../queries/sql'
 import { computeTradeCost, getPeriod } from '../utils'
-import { formatEther } from 'ethers'
+import MerkleTree from 'merkletreejs'
+
+const web3 = new Web3()
 
 class Points {
-  private basePoints = BigNumber(100_000)
-  private pointsPerProtocolFeeETH = BigNumber(50_000)
+  private readonly basePoints = BigNumber(100_000)
+  private readonly pointsPerProtocolFeeETH = BigNumber(50_000)
+  private readonly decimals = 18
 
-  private protocolFeesPointsShare = BigNumber(0.75)
-  private holdingsPointsShare = BigNumber(0.15)
-  private referralsPointsShare = BigNumber(0.04)
-  private dailyActiveUsersPointsShare = BigNumber(0.06)
+  private readonly protocolFeesPointsShare = BigNumber(0.75)
+  private readonly holdingsPointsShare = BigNumber(0.15)
+  private readonly referralsPointsShare = BigNumber(0.04)
+  private readonly dailyActiveUsersPointsShare = BigNumber(0.06)
 
   private activityForDay: ActivityForDay
-  private totalPointsToReward: BigNumber
-  private points: Record<string, BigNumber>
 
-  private addFromProtocolFees = false
-  private addFromHoldings = false
-  private addFromReferrals = false
-  private addFromDailyActiveUsers = false
+  private addFromProtocolFees
+  private addFromHoldings
+  private addFromReferrals
+  private addFromDailyActiveUsers
+
+  private userPoints: Map<string, BigNumber>
+  private claimablePoints: ClaimablePoints
+  private userClaimablePoints: UserClaimablePoints[]
 
   constructor(
     activityForDay: ActivityForDay,
+    day: Date,
     {
       addFromProtocolFees = true,
       addFromHoldings = true,
@@ -41,26 +53,38 @@ class Points {
     this.addFromReferrals = addFromReferrals
     this.addFromDailyActiveUsers = addFromDailyActiveUsers
 
-    this.points = {}
-
     const totalProtocolFees = BigInt(
       this.activityForDay.usersDayActivities?.protocolFees || '0'
     )
-    this.totalPointsToReward = this.basePoints.plus(
-      this.pointsPerProtocolFeeETH.times(formatEther(totalProtocolFees))
-    )
+
+    this.userPoints = new Map()
+    this.claimablePoints = {
+      merkleRoot: null,
+      day: day,
+      decimals: this.decimals,
+      totalPoints: this.basePoints.plus(
+        this.pointsPerProtocolFeeETH.times(formatEther(totalProtocolFees))
+      ),
+      effectivePoints: BigNumber(0)
+    }
+    this.userClaimablePoints = []
 
     this._addFromDailyActivity()
     this._addFromHoldings()
     this._addFromProtocolFees()
     this._addFromReferralFees()
+
+    this._generateMerkleData()
   }
 
-  public get() {
-    return this.points
+  public getResults() {
+    return {
+      claimablePoints: this.claimablePoints,
+      userClaimablePoints: this.userClaimablePoints
+    }
   }
 
-  private async _addFromDailyActivity() {
+  private _addFromDailyActivity() {
     if (this.addFromDailyActiveUsers) {
       const { userDayActivities, usersDayActivities } = this.activityForDay
 
@@ -68,7 +92,7 @@ class Points {
         const nbActiveUsers = BigNumber(usersDayActivities.nbActiveUsers)
 
         if (nbActiveUsers.isGreaterThan(0)) {
-          const nbPointsForActiveUsers = this.totalPointsToReward.times(
+          const nbPointsForActiveUsers = this.claimablePoints.totalPoints.times(
             this.dailyActiveUsersPointsShare
           )
           const nbPointsPerActiveUser =
@@ -81,7 +105,7 @@ class Points {
             } = userActivity
 
             if (isActiveUser) {
-              this._addPoint(userAddress, nbPointsPerActiveUser)
+              this._addPoints(userAddress, nbPointsPerActiveUser)
             }
           }
         }
@@ -89,13 +113,13 @@ class Points {
     }
   }
 
-  private async _addFromHoldings() {
+  private _addFromHoldings() {
     if (this.addFromHoldings) {
       const { visibilityBalances, protocol } = this.activityForDay
 
       const totalHoldingsETH = BigNumber(protocol.totalValueLocked)
 
-      const nbPointsForHoldings = this.totalPointsToReward.times(
+      const nbPointsForHoldings = this.claimablePoints.totalPoints.times(
         this.holdingsPointsShare
       )
 
@@ -106,88 +130,138 @@ class Points {
           visibility: { totalSupply }
         } = visibilityBalance
 
-        if (BigInt(balance) > 0) {
+        const balanceBigInt = BigInt(balance)
+
+        if (balanceBigInt > 0) {
           const userHoldingsWei = computeTradeCost(
             BigInt(totalSupply),
-            BigInt(balance),
+            balanceBigInt,
             false
           )
           const userHoldingsETH = BigNumber(formatEther(userHoldingsWei))
           const userHoldingsETHPercentage =
             userHoldingsETH.div(totalHoldingsETH)
 
-          const userPoints = nbPointsForHoldings.times(
+          const nbPointsToAdd = nbPointsForHoldings.times(
             userHoldingsETHPercentage
           )
-          this._addPoint(userAddress, userPoints)
+          this._addPoints(userAddress, nbPointsToAdd)
         }
       }
     }
   }
-  private async _addFromProtocolFees() {
+  private _addFromProtocolFees() {
     if (this.addFromProtocolFees) {
       const { userDayActivities, usersDayActivities } = this.activityForDay
 
-      if (usersDayActivities && BigInt(usersDayActivities.protocolFees) > 0n) {
+      if (usersDayActivities) {
         const totalProtocolFees = BigNumber(usersDayActivities.protocolFees)
 
-        const nbPointsForProtocolFees = this.totalPointsToReward.times(
-          this.protocolFeesPointsShare
-        )
+        if (totalProtocolFees.isGreaterThan(0)) {
+          const nbPointsForProtocolFees =
+            this.claimablePoints.totalPoints.times(this.protocolFeesPointsShare)
 
-        for (const userActivity of userDayActivities) {
-          const {
-            user: { id: userAddress },
-            protocolFees: userProtocolFees
-          } = userActivity
+          for (const userActivity of userDayActivities) {
+            const {
+              user: { id: userAddress },
+              protocolFees: userProtocolFees
+            } = userActivity
 
-          const userProtocolFeesPercentage =
-            BigNumber(userProtocolFees).div(totalProtocolFees)
+            const userProtocolFeesPercentage =
+              BigNumber(userProtocolFees).div(totalProtocolFees)
 
-          const userPoints = nbPointsForProtocolFees.times(
-            userProtocolFeesPercentage
-          )
-          this._addPoint(userAddress, userPoints)
+            const nbPointsToAdd = nbPointsForProtocolFees.times(
+              userProtocolFeesPercentage
+            )
+            this._addPoints(userAddress, nbPointsToAdd)
+          }
         }
       }
     }
   }
 
-  private async _addFromReferralFees() {
+  private _addFromReferralFees() {
     if (this.addFromReferrals) {
       const { userDayActivities, usersDayActivities } = this.activityForDay
 
-      if (usersDayActivities && BigInt(usersDayActivities.referrerFees) > 0n) {
+      if (usersDayActivities) {
         const totalReferrerFees = BigNumber(usersDayActivities.referrerFees)
 
-        const nbPointsForReferrerFees = this.totalPointsToReward.times(
-          this.referralsPointsShare
-        )
+        if (totalReferrerFees.isGreaterThan(0)) {
+          const nbPointsForReferrerFees =
+            this.claimablePoints.totalPoints.times(this.referralsPointsShare)
 
-        for (const userActivity of userDayActivities) {
-          const {
-            user: { id: userAddress },
-            referrerFees: userReferrerFees
-          } = userActivity
+          for (const userActivity of userDayActivities) {
+            const {
+              user: { id: userAddress },
+              referrerFees: userReferrerFees
+            } = userActivity
 
-          const userReferrerFeesPercentage =
-            BigNumber(userReferrerFees).div(totalReferrerFees)
+            const userReferrerFeesPercentage =
+              BigNumber(userReferrerFees).div(totalReferrerFees)
 
-          const userPoints = nbPointsForReferrerFees.times(
-            userReferrerFeesPercentage
-          )
-          this._addPoint(userAddress, userPoints)
+            const nbPointsToAdd = nbPointsForReferrerFees.times(
+              userReferrerFeesPercentage
+            )
+            this._addPoints(userAddress, nbPointsToAdd)
+          }
         }
       }
     }
   }
 
-  private _addPoint(userAddress: string, point: BigNumber) {
-    if (!this.points[userAddress]) {
-      this.points[userAddress] = point
-    } else {
-      this.points[userAddress] = this.points[userAddress].plus(point)
+  private _addPoints(userAddress: string, nbPointsToAdd: BigNumber) {
+    if (nbPointsToAdd.isGreaterThan(0)) {
+      this.userPoints.set(
+        userAddress,
+        (this.userPoints.get(userAddress) || BigNumber(0)).plus(nbPointsToAdd)
+      )
     }
+  }
+
+  private _generateMerkleData() {
+    const leafNodes = [...this.userPoints.entries()].map(
+      ([userAddress, points]) => {
+        return keccak256(
+          Buffer.concat([
+            Buffer.from(userAddress.toLowerCase().replace('0x', ''), 'hex'),
+            Buffer.from(
+              web3.eth.abi
+                .encodeParameter(
+                  'uint256',
+                  points
+                    .times(10 ** this.decimals)
+                    .toFixed(0, BigNumber.ROUND_DOWN)
+                )
+                .replace('0x', ''),
+              'hex'
+            )
+          ])
+        )
+      }
+    )
+
+    const merkleTree = new MerkleTree(leafNodes, keccak256, { sortPairs: true })
+
+    this.claimablePoints.merkleRoot = merkleTree.getHexRoot()
+
+    this.userClaimablePoints = [...this.userPoints.entries()].map(
+      ([userAddress, _points], index) => {
+        const points = _points.decimalPlaces(
+          this.decimals,
+          BigNumber.ROUND_DOWN
+        )
+        this.claimablePoints.effectivePoints =
+          this.claimablePoints.effectivePoints.plus(points)
+        const merkleProof = merkleTree.getHexProof(leafNodes[index])
+
+        return {
+          userAddress: userAddress.toLowerCase(),
+          points,
+          merkleProof
+        }
+      }
+    )
   }
 }
 
@@ -197,13 +271,11 @@ export async function computePoints(from?: string, to?: string) {
   let fromBlockNumber: number | undefined
   let toBlockNumber: number | undefined
 
-  const results = []
-
   for (const {
+    fromDate,
     fromTimestamp,
     fromGraphTimestamp,
-    toGraphTimestamp,
-    fromDateUTC
+    toGraphTimestamp
   } of days) {
     const {
       currentGraphTimestamp,
@@ -236,19 +308,51 @@ export async function computePoints(from?: string, to?: string) {
       fromTimestamp
     )
 
-    const points = new Points(activityForDay, {
+    const points = new Points(activityForDay, fromDate, {
       addFromProtocolFees: true,
       addFromHoldings: true,
       addFromReferrals: true,
       addFromDailyActiveUsers: true
     })
 
-    // compute merkle root & merkle proofs for each user
+    const { claimablePoints, userClaimablePoints } = points.getResults()
 
-    // store user address, day , points, merkle root & merkle proofs in database
-
-    results.push({ fromDateUTC, points })
+    await storeClaimablePointsAndUsers(claimablePoints, userClaimablePoints)
   }
+}
 
-  return results
+export function verifyMerkleProof(
+  userAddress: string,
+  points: string, // Should be passed as a string to avoid JS floating point issues
+  decimals: number,
+  merkleRoot: string,
+  merkleProof: string[]
+): boolean {
+  const normalizedAddress = userAddress.toLowerCase()
+
+  const formattedPoints = new BigNumber(points)
+    .times(new BigNumber(10).pow(decimals)) // Convert to `uint256` scale
+    .decimalPlaces(0, BigNumber.ROUND_DOWN) // Ensure integer value
+    .toFixed(0) // Convert to string
+
+  // Encode points as `uint256` using Web3 ABI
+  const encodedPoints = web3.eth.abi
+    .encodeParameter('uint256', formattedPoints)
+    .replace('0x', '')
+
+  const leaf = keccak256(
+    Buffer.concat([
+      Buffer.from(normalizedAddress.replace('0x', ''), 'hex'),
+      Buffer.from(encodedPoints, 'hex')
+    ])
+  )
+
+  const proofBuffers = merkleProof.map((proof) =>
+    Buffer.from(proof.replace(/^0x/, ''), 'hex')
+  )
+  const rootBuffer = Buffer.from(merkleRoot.replace(/^0x/, ''), 'hex')
+
+  return MerkleTree.verify(proofBuffers, leaf, rootBuffer, keccak256, {
+    sortPairs: true
+  })
 }

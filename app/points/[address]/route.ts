@@ -1,4 +1,4 @@
-import { getPointsData } from '@/app/queries/sql'
+import { getClaimablePointsForUser } from '@/app/queries/sql'
 import { NextRequest, NextResponse } from 'next/server'
 
 type Props = {
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: Props) {
   const to = searchParams.get('to') || undefined
 
   try {
-    const results = await getPointsData(address, from, to)
+    const results = await getClaimablePointsForUser(address, from, to)
     return NextResponse.json(results, { status: 200 })
   } catch (error) {
     console.error('Database error:', error)

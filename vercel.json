@@ -4,5 +4,10 @@
       "path": "/points",
       "schedule": "0 3 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "points/route.ts": {
+      "maxDuration": 250
+    }
+  }
 }
