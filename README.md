@@ -33,13 +33,13 @@ The system distributes an amount of points, calculated daily (e.g., **100,000 po
 
 ### **Public API**
 
-* **GET** `/points/[user_address]?from=YYYY-MM-DD&to=YYYY-MM-DD`  
+* **GET** `/api/points/[user_address]?from=YYYY-MM-DD&to=YYYY-MM-DD`  
   * Fetch points data for a user.  
   * **Optional:** `from` and `to` (default = previous Monday → Sunday).
 
 ### **Daily Cron Job**
 
-* **GET** `/points?from=YYYY-MM-DD&to=YYYY-MM-DD`  
+* **GET** `/api/points?from=YYYY-MM-DD&to=YYYY-MM-DD`  
   * Computes points for a given period.  
   * **Optional:** `from` and `to` (default = past day).
 
