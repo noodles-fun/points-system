@@ -6,7 +6,7 @@
     }
   ],
   "functions": {
-    "api/points": {
+    "app/api/points/route": {
       "maxDuration": 250
     }
   }
