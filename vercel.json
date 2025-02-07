@@ -1,12 +1,12 @@
 {
   "crons": [
     {
-      "path": "/points",
+      "path": "/api/points",
       "schedule": "0 3 * * *"
     }
   ],
   "functions": {
-    "points/route.ts": {
+    "api/points/route.ts": {
       "maxDuration": 250
     }
   }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { computePoints } from './compute'
+import { computePoints } from '../../lib/points'
 
 export async function GET(request: NextRequest) {
   try {

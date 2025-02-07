@@ -1,7 +1,7 @@
 'use server'
 import { neon } from '@neondatabase/serverless'
 import BigNumber from 'bignumber.js'
-import { checkValidAddress, getPeriod } from '../utils'
+import { checkValidAddress, getPeriod } from '../lib/utils'
 
 const sql = neon(process.env.DATABASE_URL as string)
 

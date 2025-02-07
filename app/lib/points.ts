@@ -1,5 +1,6 @@
 import { BigNumber } from 'bignumber.js'
 import { formatEther, keccak256 } from 'ethers'
+import MerkleTree from 'merkletreejs'
 import Web3 from 'web3'
 import {
   ActivityForDay,
@@ -11,8 +12,7 @@ import {
   storeClaimablePointsAndUsers,
   UserClaimablePoints
 } from '../queries/sql'
-import { computeTradeCost, getPeriod } from '../utils'
-import MerkleTree from 'merkletreejs'
+import { computeTradeCost, getPeriod } from './utils'
 
 const web3 = new Web3()
 
