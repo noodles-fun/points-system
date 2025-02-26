@@ -27,7 +27,7 @@ The system distributes an amount of points, calculated daily (e.g., **100,000 po
 ### **Notes**
 
 * Each point corresponds to **1 $NOOD** (to be confirmed).
-* The daily points distribution is **dynamic**: `N = 100,000 + (50,000 * protocol revenue in ETH)`
+* The daily points distribution is **dynamic**: `100,000 + (50,000 * protocol revenue in ETH)`
 
 ## **API Endpoints**
 
