@@ -1,5 +1,5 @@
 import { BigNumber } from 'bignumber.js'
-import { formatEther, keccak256, N } from 'ethers'
+import { formatEther, keccak256 } from 'ethers'
 import MerkleTree from 'merkletreejs'
 import Web3 from 'web3'
 import {
