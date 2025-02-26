@@ -4,10 +4,5 @@
       "path": "/api/points",
       "schedule": "0 3 * * *"
     }
-  ],
-  "functions": {
-    "app/api/points/route": {
-      "maxDuration": 250
-    }
-  }
+  ]
 }

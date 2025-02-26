@@ -1,5 +1,5 @@
 import { BigNumber } from 'bignumber.js'
-import { formatEther, keccak256 } from 'ethers'
+import { formatEther, keccak256, N } from 'ethers'
 import MerkleTree from 'merkletreejs'
 import Web3 from 'web3'
 import {
@@ -67,6 +67,7 @@ class Points {
       ),
       effectivePoints: BigNumber(0)
     }
+
     this.userClaimablePoints = []
 
     this._addFromDailyActivity()
@@ -133,12 +134,17 @@ class Points {
         const balanceBigInt = BigInt(balance)
 
         if (balanceBigInt > 0) {
-          const userHoldingsWei = computeTradeCost(
+          const totalHoldingsWei = computeTradeCost(
             BigInt(totalSupply),
-            balanceBigInt,
+            BigInt(totalSupply),
             false
           )
-          const userHoldingsETH = BigNumber(formatEther(userHoldingsWei))
+          const balanceShare = BigNumber(balance).div(totalSupply)
+
+          const userHoldingsETH = BigNumber(
+            formatEther(totalHoldingsWei)
+          ).times(balanceShare)
+
           const userHoldingsETHPercentage =
             userHoldingsETH.div(totalHoldingsETH)
 
@@ -262,6 +268,15 @@ class Points {
         }
       }
     )
+
+    console.log('Points results', this.claimablePoints)
+    if (
+      this.claimablePoints.effectivePoints.isGreaterThan(
+        this.claimablePoints.totalPoints
+      )
+    ) {
+      throw new Error('Effective points are greater than total')
+    }
   }
 }
 
