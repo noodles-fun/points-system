@@ -269,12 +269,18 @@ class Points {
       }
     )
 
-    console.log('Points results', this.claimablePoints)
-    if (
-      this.claimablePoints.effectivePoints.isGreaterThan(
-        this.claimablePoints.totalPoints
-      )
-    ) {
+    const eRounded = this.claimablePoints.effectivePoints.decimalPlaces(
+      0,
+      BigNumber.ROUND_UP
+    )
+    const tRounded = this.claimablePoints.totalPoints.decimalPlaces(
+      0,
+      BigNumber.ROUND_UP
+    )
+
+    console.log({ pointsResults: this.claimablePoints, eRounded, tRounded })
+
+    if (eRounded.isGreaterThan(tRounded)) {
       throw new Error('Effective points are greater than total')
     }
   }
