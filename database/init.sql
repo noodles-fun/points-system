@@ -6,7 +6,8 @@ CREATE TABLE claimable_points (
     day TIMESTAMP WITH TIME ZONE NOT NULL UNIQUE,
     decimals INTEGER NOT NULL,
     total_points NUMERIC(78, 18) NOT NULL,
-    effective_points NUMERIC(78, 18) NOT NULL
+    -- base total points distributed, it may be slightly lower than effective points because of rounding OR may be less because of inactivity 
+    effective_points NUMERIC(78, 18) NOT NULL -- real total number of points distributed, for merkle proof it may be better to ROUNDED UP this value  
 );
 CREATE TABLE user_claimable_points (
     id SERIAL PRIMARY KEY,
